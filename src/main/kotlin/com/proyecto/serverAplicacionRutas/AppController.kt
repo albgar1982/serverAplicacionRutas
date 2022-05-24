@@ -5,29 +5,47 @@ import java.util.*
 import kotlin.random.Random
 
 @RestController
-class AppController(private val usuarioRepository: UsuarioRepository,private val rutaRepository: RutaRepository) {
+class AppController(private val usuarioRepository: UsuarioRepository,private val rutaRepository: RutaRepository,private val ubicacionRepository: UbicacionRepository,private val progresoRepository: ProgresoRepository) {
 
-    //Devuelve "Contrasenia incorrecta" O el token
-    @PostMapping("appendUser/{usuario}")
-    fun appendUser(@PathVariable usuario: String, @RequestBody contrasenia: String): String {
+    //REQUEST CERO
+    //curl -v localhost:8082/mostrarBaseDatos
+    // Solo para probar que to.do está bien salvado
+    @GetMapping("mostrarBaseDatos")
+    fun mostrarBaseDatos(){
+        rutaRepository.findAll().forEach { ruta ->
+            println("\nLa ruta se llama " + ruta.nombre + " y contiene las siguientes ubicaciones:\n")
+            ruta.listaUbicaciones.forEach { ubicacion ->
+                println(ubicacion.nombreCoordenada)
+            }
+        }
+    }
+
+
+    //REQUEST UNO
+    //Se llama desde LoginActivityViewModel
+    //La contraseña va por RequestBody porque puede incluir to.do tipo de caracteres que harían que fallase si no lo enviáramos así
+    //Devuelve un String: "Contrasenia incorrecta" o el token
+    @PostMapping("loguear/{nombreUsuario}")
+    fun loguear(@PathVariable nombreUsuario: String, @RequestBody contrasenia: String): String {
         val token = crearToken()
         val fecha = Calendar.getInstance()
         println("La contraseña que viene en el requestBody es $contrasenia")
-        val posibleUsuario = comprobarUsuario(usuario)
+        val posibleUsuario = comprobarUsuario(nombreUsuario)
 
         if (posibleUsuario != null) {
-            //si existe el usuario, comprobamos la contra. Si es buena, le renovamos el token
-
-            if (comprobarContraseña(posibleUsuario, contrasenia)) {
-                //Si la contra es buena, le doy el token nuevo, lo salvo y devuelvo el token para que siga hacia elegir ruta
-                posibleUsuario.token = token
-                posibleUsuario.fecha = fecha //le doy una nueva hora, para que se resetee la caducidad del token
-                usuarioRepository.save(posibleUsuario) //actualizo ese usuario en la database
-            } else //Si no, devuelvo:
-                return "Contrasenia incorrecta"
+            //si existe el usuario, comprobamos la contra...
+            posibleUsuario.let {
+                if (comprobarContraseña(it, contrasenia)) {
+                    //Si la contra es buena, le doy el token nuevo, lo salvo y devuelvo el token para que siga hacia elegir ruta
+                    it.token = token
+                    it.fecha = fecha //le doy una nueva hora, para que se resetee la caducidad del token
+                    usuarioRepository.save(it) //actualizo ese usuario en la database
+                } else //Si no, devuelvo:
+                    return "Contrasenia incorrecta"
+            }
         } else {
             //Si no existe el usuario, lo creo y lo salvo
-            val user = Usuario(usuario, contrasenia, token, fecha, rutaRepository.findAll())
+            val user = Usuario(nombreUsuario, contrasenia, token, fecha,0,0)
             usuarioRepository.save(user)
         }
         usuarioRepository.findAll().forEach {
@@ -36,6 +54,67 @@ class AppController(private val usuarioRepository: UsuarioRepository,private val
         }
         return token
     }
+
+
+    //REQUEST DOS
+    //Se llama desde SeleccionRutaViewModel
+    //Devuelve la lista con los nombres de las rutas
+    @GetMapping("getListRutas")
+    fun getListRutas():String{
+        val listaRutas = mutableListOf<String>()
+        rutaRepository.findAll().forEach {
+            listaRutas+=it.nombre
+        }
+
+        println("Devuelvo la siguiente lista de rutas: $listaRutas")
+        return Rutas(listaRutas).toString()
+    }
+
+
+    //REQUEST TRES
+    //Devuelve "-1" si el token está caducado (habrá que volver a LoginActivity)
+    //Si el token está bien, devolverá un objeto RutaYProgreso con posic 0 si nunca ha recogido una llave o con la posic de la llave que le toca
+    //getProgress/alber/tdtqjx/Benavente
+    @GetMapping("getProgress/{nombreUsuario}/{ruta}/{token}")
+    fun getProgress(@PathVariable nombreUsuario: String, @PathVariable ruta: String, @PathVariable token: String): String {
+
+        val usuario = usuarioRepository.getById(nombreUsuario)
+        //Busco usuario y compruebo si está caducado su token
+        if(checkTokenTime(usuario))
+            return "caducado"
+        else{
+            //Si no está caducado, renuevo la fecha del usuario y lo salvo
+            usuario.fecha = Calendar.getInstance()
+            usuarioRepository.save(usuario)
+            val objetoRuta = rutaRepository.getById(ruta)
+            var posic = 0
+
+            progresoRepository.findAll().forEach{
+                //Comprobamos si esa ruta está en ProgresoRepository. Si está, comprobamos el usuario.
+                if (it.rutaId == ruta && it.usuarioId==nombreUsuario) {
+                    //Si está, cogemos la posición de la llave
+                    posic = it.pistaActual
+                    return RutaYProgreso(objetoRuta.nombre,objetoRuta.listaUbicaciones,posic).toString()
+                    //Si no está la ruta aún no creamos esa fila, ya lo haremos cuando coja la primera llave; devolvemos posición 0
+                }
+            }
+            return RutaYProgreso(objetoRuta.nombre,objetoRuta.listaUbicaciones,posic).toString()
+        }
+
+    }
+/*
+    usuarioRepository.findAll().forEach {
+        if(it.equals("alber"))
+            usuarioRepository.delete(it)
+    }
+
+ */
+
+
+
+
+
+
 
     //Devuelve "ERROR" o el usuario en json
     @GetMapping("conseguirUsuario/{token}")
@@ -91,7 +170,7 @@ class AppController(private val usuarioRepository: UsuarioRepository,private val
         return usuario.password == contrasenia
     }
 
-    private fun comprobarUsuario(usuario: String): Usuario? {
+    private fun comprobarUsuario(nombreUsuario: String): Usuario? {
         var user: Usuario? = null
         val listaUsuarios = usuarioRepository.findAll()
         var i = 0
@@ -100,7 +179,7 @@ class AppController(private val usuarioRepository: UsuarioRepository,private val
             if (listaUsuarios.isEmpty())
                 salir = true
             else {
-                if (listaUsuarios[i].nombre == usuario) {
+                if (listaUsuarios[i].nombre == nombreUsuario) {
                     user = listaUsuarios[i]
                     salir = true
                 } else
@@ -165,15 +244,7 @@ class AppController(private val usuarioRepository: UsuarioRepository,private val
     }*/
 
 
-    @GetMapping("getListUbicaciones")
-    fun getListaDePreguntas():String{
-        var listaRutas=""
-        rutaRepository.findAll().forEach {
-            listaRutas+=it.toString()
-        }
 
-        return listaRutas
-    }
 
 
     @PostMapping("guardar")
