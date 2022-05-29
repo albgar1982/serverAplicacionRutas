@@ -77,9 +77,9 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
     //Si to.do está bien, devolverá un objeto RutaYProgreso con posic 0 si nunca ha recogido una llave o con la posic de la llave que le toque si ya ha recogido alguna
     @GetMapping("getProgress/{nombreUsuario}/{ruta}/{token}")
     fun getProgress(@PathVariable nombreUsuario: String, @PathVariable ruta: String, @PathVariable token: String): String {
-        println("usuario: "+nombreUsuario)
-        println("ruta: "+ruta)
-        println("token: "+token)
+        println("usuario: $nombreUsuario")
+        println("ruta: $ruta")
+        println("token: $token")
 
 
         if (usuarioRepository.findByIdOrNull(nombreUsuario) == null)
@@ -96,18 +96,18 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
                     usuario.fecha = Calendar.getInstance()
                     usuarioRepository.save(usuario)
                     val objetoRuta = rutaRepository.getById(ruta)
-                    var posic = 0
 
                     progresoRepository.findAll().forEach {
                         //Comprobamos si esa ruta está en ProgresoRepository. Si está, comprobamos el usuario.
                         if (it.rutaId == ruta && it.usuarioId == nombreUsuario) {
-                            //Si está, cogemos la posición de la llave
-                            posic = it.pistaActual
-                            return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, posic).toString()
-                            //Si no está la ruta aún no creamos esa fila, ya lo haremos cuando coja la primera llave; devolvemos posición 0
+                            //Si están ambos, devolvemos la pista que toca:
+                            return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, it.pistaActual).toString()
+                            //NOTA: esta pista podría también ser cero en el caso de que no fuera la primera vez que juega esa ruta
                         }
                     }
-                    return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, posic).toString()
+
+                    //Si no está la ruta aún no creamos esa fila, ya lo haremos cuando coja la primera llave; devolvemos posición 0
+                    return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, 0).toString()
                 }
             }
         }
@@ -115,81 +115,50 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
     }
 
     //REQUEST CUATRO
-    @PostMapping("salvarProgreso/{nombreUsuario}/{ruta}")
-    fun salvarProgreso(@PathVariable nombreUsuario: String, @PathVariable ruta: String) {
+    //Se llama desde PruebaARViewModel
+    //Devuelve el json de la fila de progreso salvada O, si era la última ubicación de esa ruta, lo necesario para lanzar SeleccionRutaActivity
+    @GetMapping("salvarProgreso/{nombreUsuario}/{ruta}")
+    fun salvarProgreso(@PathVariable nombreUsuario: String, @PathVariable ruta: String) :String {
+
         progresoRepository.findAll().forEach {
-            //Comprobamos si esa ruta está en ProgresoRepository. Si está, comprobamos el usuario.
+            //Comprobación en cortocircuito: Comprobamos si esa ruta está en ProgresoRepository. Si está, comprobamos el usuario.
             if (it.rutaId == ruta && it.usuarioId == nombreUsuario) {
-                it.pistaActual++
-                if(it.pistaActual==3){
-                    it.pistaActual=0
-                    usuarioRepository.getById(nombreUsuario).llaves++
-                    usuarioRepository.getById(nombreUsuario).rutas++
-                    println("El user ${usuarioRepository.getById(nombreUsuario).nombre} tiene ${usuarioRepository.getById(nombreUsuario).llaves} llaves y ha completado ${usuarioRepository.getById(nombreUsuario).rutas} rutas")
+                val progreso = progresoRepository.getById(it.id) //Creamos un objeto Progreso
+                val user = usuarioRepository.getById(nombreUsuario) //Creamos un objeto Usuario
+
+                progreso.pistaActual++ //Al progreso le ponemos un más uno (avance en la lista de ubicaciones). Así, al encontrarlo en la request 3, se jugará ya buscando la siguiente llave
+                user.llaves++ //Al usuario le sumamos una llave más
+                if(progreso.pistaActual==(rutaRepository.getById(ruta).listaUbicaciones.size)) { //Si era la última pista...
+                    progreso.pistaActual = 0 //...reseteamos a la primera, porque quiere decir que ha acabado la ruta...
+                    user.rutas++ //y al usuario le añadimos una ruta.
+                    //Salvo:
+                    progresoRepository.save(progreso)
+                    usuarioRepository.save(user)
+                    println("El user ${user.nombre} tiene ${user.llaves} llaves y ha completado ${user.rutas} rutas")
+                    return Token(user.token).toString() //Devuelvo lo necesario para hacer el launch() de SeleccionRutasActivity
                 }
+                //Salvo los cambios en las tablas pertinentes:
+                progresoRepository.save(progreso)
+                usuarioRepository.save(user)
+
+                println("El user ${user.nombre} tiene ${user.llaves} llaves y ha completado ${user.rutas} rutas")
+
+                return user.token //Devuelvo el json de esa fila de la tabla progreso.
             }
-            else
-                progresoRepository.save(Progreso(nombreUsuario,ruta,1))
         }
-    }
-/*
-    usuarioRepository.findAll().forEach {
-        if(it.equals("alber"))
-            usuarioRepository.delete(it)
-    }
-
- */
-
-
-    //Devuelve "ERROR" o el usuario en json
-    @GetMapping("conseguirUsuario/{token}")
-    fun conseguirUsuario(@PathVariable token: String): String {
-        val usuario = encontrarUsuario(token) //Devuelve cadena vacía o nombre de usuario
-        return if (usuario.isEmpty())
-            "ERROR"
-        else {
-            println("Voy a devolver ${usuarioRepository.getById(usuario)}")
-            usuarioRepository.getById(usuario).toString()
-        }
+        //Si no hemos encontrado nunca ese usuario con esa ruta, hay que salvarlo to.do igualmente, poniendo que la siguiente pista es la 1:
+        val progres = Progreso(nombreUsuario,ruta,1)
+        progresoRepository.save(progres)
+        val user = usuarioRepository.getById(nombreUsuario)
+        user.llaves++
+        usuarioRepository.save(user)
+        println(progres.toString())
+        println("El user ${user.nombre} tiene ${user.llaves} llaves y ha completado ${user.rutas} rutas")
+        return user.token
     }
 
-    /*
-    @GetMapping("solicitarUsuarioConToken/{token}")
-    fun solicitarUsuarioConToken(@PathVariable token: String): String {
-        var pregunta = ""
-        val usuario = usuarioRepository.getById(encontrarUsuario(token))
-        val tokenCaducado = checkTokenTime(usuario)
-        if (tokenCaducado) {
-            println("ERROR")
-            return "ERROR"
-        } else {
-            if (usuario.idPreguntas.size == 0)
-                return "No quedan preguntas"
-            usuario.fecha=Calendar.getInstance()
-            userRepository.save(usuario)
-            val numPregunta = usuario.idPreguntas[Random.nextInt(0, usuario.idPreguntas.size)]
-            var i = 0
-            var salir = false
-            do {
-                if (Repositorio.preguntasYrespuestas[i].identificador == numPregunta) {
-                    salir = true
-                    pregunta = Repositorio.preguntasYrespuestas[i].toString()
-                    usuario.idPreguntas.remove(numPregunta)
-                    userRepository.save(usuario)
-                } else
-                    i++
-            } while (!salir && i < Repositorio.preguntasYrespuestas.size)
 
-
-            val objetoJson = JSONObject(pregunta)
-            objetoJson.remove("respuestaCorrecta")
-            println(objetoJson)
-            return objetoJson.toString()
-        }
-    }
-
-     */
-
+    //Funciones ACCESORIAS:
 
     private fun comprobarContraseña(usuario: Usuario, contrasenia: String): Boolean {
         return usuario.password == contrasenia
@@ -214,22 +183,6 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
         return user
     }
 
-    private fun encontrarUsuario(token: String): String {
-        var idUsuario = ""
-        val listaUsuarios = usuarioRepository.findAll()
-        var i = 0
-        var salir = false
-        do {
-            if (listaUsuarios[i].token == token) {
-                println("He encontrado el token $token. El del usuario es: ${listaUsuarios[i].token}. El usuario se llama ${listaUsuarios[i].nombre}")
-                idUsuario = listaUsuarios[i].nombre
-                salir = true
-            } else
-                i++
-        } while (!salir && i < listaUsuarios.size)
-        return idUsuario
-    }
-
     private fun crearToken(): String {
         var token = ""
         repeat(6) {
@@ -250,28 +203,5 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
         println("Han pasado ${tiempoTranscurrido.toFloat() / (1000 * 60)} minutos")
 
         return caducado
-    }
-
-    /* private fun encontrarUsuario(token: String): Int {
-         var idUsuario = 0
-         val listaUsuarios = usuarioRepository.findAll()
-         var i = 0
-         var salir = false
-         do {
-             if (listaUsuarios[i].token == token) {
-                 println("He encontrado el token $token. El del usuario es: ${listaUsuarios[i].token} en la posición $i de la lista de la database")
-                 idUsuario = listaUsuarios[i].id
-                 salir = true
-             } else
-                 i++
-         } while (!salir && i < listaUsuarios.size)
-         return idUsuario
-     }*/
-
-
-    @PostMapping("guardar")
-    fun guardarProgreso(@RequestBody usuario: Usuario): String {
-        usuarioRepository.save(usuario)
-        return "Progreso Guardado"
     }
 }

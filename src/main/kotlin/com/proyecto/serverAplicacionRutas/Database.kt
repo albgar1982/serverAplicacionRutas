@@ -32,7 +32,7 @@ class Database {
             val ruta2 = Ruta("Oporto", listOf(ubi4,ubi5,ubi6))
             rutaRepository.save(ruta2)
 
-            val ubi7 = Ubicacion("Ubi1", 40.387499804036125, -3.7335673435684615,"Peluquería")
+            val ubi7 = Ubicacion("Ubi1", 40.388036625481064, -3.734641810617555,"Peluquería")
             val ubi8 = Ubicacion("Ubi2",40.38883652462917, -3.735392524328793,"Esquina Gaviota/Matilde Hernández")
             val ubi9 = Ubicacion("Ubi3",40.38909049854261, -3.7349654788303828,"Matilde Hernández/Linares")
             ubicacionRepository.save(ubi7)
