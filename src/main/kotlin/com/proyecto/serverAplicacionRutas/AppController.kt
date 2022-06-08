@@ -100,14 +100,15 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
                     progresoRepository.findAll().forEach {
                         //Comprobamos si esa ruta está en ProgresoRepository. Si está, comprobamos el usuario.
                         if (it.rutaId == ruta && it.usuarioId == nombreUsuario) {
+                            val usua=usuarioRepository.getById(nombreUsuario)
                             //Si están ambos, devolvemos la pista que toca:
-                            return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, it.pistaActual).toString()
+                            return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, it.pistaActual,usua.llaves,usua.rutas).toString()
                             //NOTA: esta pista podría también ser cero en el caso de que no fuera la primera vez que juega esa ruta
                         }
                     }
-
+                    val usua=usuarioRepository.getById(nombreUsuario)
                     //Si no está la ruta aún no creamos esa fila, ya lo haremos cuando coja la primera llave; devolvemos posición 0
-                    return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, 0).toString()
+                    return RutaYProgreso(objetoRuta.nombre, objetoRuta.listaUbicaciones, 0,usua.llaves,usua.rutas).toString()
                 }
             }
         }
@@ -116,7 +117,7 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
 
     //REQUEST CUATRO
     //Se llama desde PruebaARViewModel
-    //Devuelve el json de la fila de progreso salvada O, si era la última ubicación de esa ruta, lo necesario para lanzar SeleccionRutaActivity
+    //Devuelve el json de la fila de progreso salvada O, si era la última ubicación de esa ruta, lo necesario para lanzar VideoActivity
     @GetMapping("salvarProgreso/{nombreUsuario}/{ruta}")
     fun salvarProgreso(@PathVariable nombreUsuario: String, @PathVariable ruta: String) :String {
 
@@ -135,7 +136,7 @@ class AppController(private val usuarioRepository: UsuarioRepository, private va
                     progresoRepository.save(progreso)
                     usuarioRepository.save(user)
                     println("El user ${user.nombre} tiene ${user.llaves} llaves y ha completado ${user.rutas} rutas")
-                    return Token(user.token).toString() //Devuelvo lo necesario para hacer el launch() de SeleccionRutasActivity
+                    return Token(user.token).toString() //Devuelvo lo necesario para hacer el launch() de VideoActivity
                 }
                 //Salvo los cambios en las tablas pertinentes:
                 progresoRepository.save(progreso)
