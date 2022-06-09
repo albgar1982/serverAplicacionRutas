@@ -11,9 +11,9 @@ class Database {
         return CommandLineRunner {
 
             //Creo unas cuantas ubicaciones y las salvo en su tabla
-            val ubi1 = Ubicacion("Plaza Benavente",40.4146,-3.7037,"Plaza con la estatua de un barrendero")
-            val ubi2 = Ubicacion("Plaza Santa Ana",40.4144,-3.7011,"")
-            val ubi3 = Ubicacion("Antón Martín",40.4124,-3.6993,"")
+            val ubi1 = Ubicacion("Plaza Benavente",40.41455105074355, -3.70350325013038,"Aquí barren todos los días")
+            val ubi2 = Ubicacion("Estatua Calderón",40.41468170740479, -3.701231707243773,"Los sueños, sueños son")
+            val ubi3 = Ubicacion("Estatua Lorca",40.414763807336996, -3.7004956696837845,"La poesía no quiere adeptos, quiere amantes")
             ubicacionRepository.save(ubi1)
             ubicacionRepository.save(ubi2)
             ubicacionRepository.save(ubi3)
